@@ -1,7 +1,6 @@
 .pytest_cache
 .venv
 .env
-.env.*
 .vscode
 uv.lock
 tests
