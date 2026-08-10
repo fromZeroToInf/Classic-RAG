@@ -10,3 +10,6 @@ COPY ./src ./src
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
+
+RUN useradd --create-home appuser
+USER appuser
