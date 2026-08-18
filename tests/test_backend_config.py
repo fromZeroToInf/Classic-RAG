@@ -52,3 +52,4 @@ def test_documents_dir_path(monkeypatch,clean_settings) -> None:
         settings = clean_settings()
         assert isinstance(settings.DOCUMENTS_IN_DIR, Path)
         assert isinstance(settings.DOCUMENTS_OUT_DIR, Path)
+        assert isinstance(settings.CHUNKS_OUT_DIR, Path)
