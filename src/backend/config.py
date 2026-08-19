@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = Field(default=6333)
     DOCUMENTS_IN_DIR: Path = Field(default=define_project_root_path() / "data/input_docs")
     DOCUMENTS_OUT_DIR: Path = Field(default=define_project_root_path() / "data/output_docs")
-    CHUNKS_OUT_DIR: Path = Field(define_project_root_path()/ "data/chunks")
+    CHUNKS_OUT_DIR: Path = Field(define_project_root_path() / "data/chunks")
     LLM_PROVIDER: str | None = Field(default=None)
     LLM_API_KEY: str | None = Field(default=None)
 
