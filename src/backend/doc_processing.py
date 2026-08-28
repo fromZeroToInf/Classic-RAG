@@ -10,6 +10,14 @@ def hash_file(path: Path) -> str:
     return hasher.hexdigest()
 
 def hash_files(dir_path:Path, type:str="pdf") -> List[Tuple[str,str]]:
+    """
+    Args:
+        dir_path (Path): Directory Path
+        type (str, optional): MIME Type. Defaults to "pdf".
+
+    Returns:
+        List[Tuple[str,str]]: [filename, hash]
+    """
     fps =  sorted(dir_path.glob(f"*.{type}"))
     return [(f.stem, hash_file(f)) for f in fps]
         
