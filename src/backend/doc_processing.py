@@ -1,4 +1,5 @@
 import hashlib
+import re
 from pathlib import Path
 from typing import List, Tuple
 
@@ -20,4 +21,9 @@ def hash_files(dir_path:Path, type:str="pdf") -> List[Tuple[str,str]]:
     """
     fps =  sorted(dir_path.glob(f"*.{type}"))
     return [(f.stem, hash_file(f)) for f in fps]
+
+def regex_normalize_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", text) # multiple whitespaces
+    text = re.sub(r"\xad\s*", "", text) # one word separated by dash and whitespace
+    return text
         

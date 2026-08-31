@@ -3,8 +3,8 @@ import os
 os.environ["TORCHDYNAMO_DISABLE"] = "1"  # windows issue incompatibility
 import json
 import pprint
-
 from docling.document_converter import DocumentConverter
+
 
 from backend.config import settings
 
