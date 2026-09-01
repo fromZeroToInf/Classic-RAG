@@ -16,9 +16,9 @@ def test_regex_normalize_text_mult_whitespaces(dp) -> None:
     text3= "  HELLO  "
     res = "HELLO"
     
-    res1 = dp._regex_normalize_text(text1)
-    res2 = dp._regex_normalize_text(text2)
-    res3 = dp._regex_normalize_text(text3)
+    res1 = dp._regex_normalize_text_ger(text1)
+    res2 = dp._regex_normalize_text_ger(text2)
+    res3 = dp._regex_normalize_text_ger(text3)
     
     assert res1 == text2
     assert res2 == text2
@@ -29,9 +29,9 @@ def test_regex_normalize_text_mult_whitespaces(dp) -> None:
     text3= "HE\xad\nLLO"
     text4= "HE\xad und LLO WORLD"
     
-    res2 = dp._regex_normalize_text(text2)
-    res3 = dp._regex_normalize_text(text3)
-    res4 = dp._regex_normalize_text(text4)
+    res2 = dp._regex_normalize_text_ger(text2)
+    res3 = dp._regex_normalize_text_ger(text3)
+    res4 = dp._regex_normalize_text_ger(text4)
     
     assert res2 == "HELLO"
     assert res3 == "HELLO"
