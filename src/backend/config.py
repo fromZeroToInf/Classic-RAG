@@ -4,7 +4,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from common.getprojectroot import define_project_root_path
-
+from dataclasses import dataclass, field
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(define_project_root_path() / ".env"))
@@ -18,3 +18,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+@dataclass(frozen=True, slots=True)
+class Chunking_Constants:
+    MAX_TOKENS: int = 512
+    CEILING: int = MAX_TOKENS + 128
+    TEXT_EMBEDDING_MODEL: str = "BAAI/bge-m3"
+    THRESHOLD_SMALL_CHUNKS: int = 100
