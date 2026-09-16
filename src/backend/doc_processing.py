@@ -9,11 +9,14 @@ from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTok
 from docling_core.types.doc import DoclingDocument
 from docling.chunking import HybridChunker
 from transformers import AutoTokenizer
-from backend.chunk_schema import Chunk
+from backend.models import Chunk
+from backend.models import Doc_Hashes
 from backend.config import Chunking_Constants
 from backend.config import settings
 import jsonlines
 from tqdm.notebook import tqdm, trange
+import inspect
+import json 
 
 class Doc_Processing:
     def __init__(self, chunking_constants: Chunking_Constants, merge_peers=True, dev_mode=False):
@@ -46,11 +49,19 @@ class Doc_Processing:
             type (str, optional): MIME Type. Defaults to "pdf".
 
         Returns:
-            List[Tuple[str,str]]: [filename, hash]
+            List[Tuple[str,str]]: [filename, doc_id:hash]
         """
         fps =  sorted(dir_path.glob(f"*.{type}"))
         return [(f.stem, self._hash_file(f)) for f in fps]
 
+    def _hash_fn(self, fn) -> str:
+        src = inspect.getsource(fn)
+        return hashlib.sha256(src.encode("utf-8")).hexdigest()[:12]
+    
+    def _hash_dict(self, d:dict) -> str:
+        json_obj = json.dumps(d, sort_keys=True)
+        return hashlib.sha256(json_obj.encode("utf-8")).hexdigest()[:12]
+    
     def _regex_normalize_text_ger(self,text: str) -> str:
         """Removes multiple whitespaces and word separation by one dash and whitespaces
         """
@@ -75,10 +86,37 @@ class Doc_Processing:
         """
         hashes = self._hash_files(settings.DOCUMENTS_IN_DIR)
 
-        settings.CHUNKS_OUT_DIR.mkdir(parents=True, exist_ok=True)
+        
+        #settings.CHUNKS_OUT_DIR.mkdir(parents=True, exist_ok=True)
+        
+        #load manifest to check doc is new
+        manifest:dict[str,Doc_Hashes] = {}
+        with jsonlines.open(settings.DOC_HASHES_OUT_DIR, mode="r") as reader:
+            for key,value in tqdm(reader, desc="Loading Manifest", unit="file"):
+                manifest[key] = value
        
         for stem, doc_id in tqdm(hashes, desc="Reading Files", unit="file"):
             fp = list(settings.DOCUMENTS_OUT_DIR.glob(f"{stem}.json"))[0]
+            
+                
+            
+            doc_hash = Doc_Hashes(source_name=stem, doc_id=doc_id, tokenizer=self._constants.TEXT_EMBEDDING_MODEL, max_tokens=self._constants.MAX_TOKENS, ceiling=self._constants.CEILING, threshold=self._constants.THRESHOLD_SMALL_CHUNKS, normalize_text=self._hash_fn(self._regex_normalize_text_ger))
+            
+            total_hash = self._hash_dict(doc_hash.model_dump())
+            doc_hash.total_hash = total_hash
+            
+            # TODO: check if doc was already processed
+            if stem in manifest:
+                doc_info_manif = manifest[stem]
+                if doc_hash.total_hash == doc_info_manif.total_hash:
+                    continue
+                #case wipe all
+            doc_mapping = {stem: doc_hash}
+            
+            with jsonlines.open(settings.DOC_HASHES_OUT_DIR, mode="w") as writer:
+                writer.write(json.dumps(doc_mapping))
+            
+            
             doc = DoclingDocument.load_from_json(fp)
             out_fp = settings.CHUNKS_OUT_DIR / f"{stem}.jsonl"
             with jsonlines.open(out_fp, mode="w") as writer:
