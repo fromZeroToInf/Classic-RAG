@@ -7,15 +7,27 @@ from common.getprojectroot import define_project_root_path
 from dataclasses import dataclass, field
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=str(define_project_root_path() / ".env"))
-    QDRANT_HOST: str = Field(default="localhost")
-    QDRANT_PORT: int = Field(default=6333)
-    DOCUMENTS_IN_DIR: Path = Field(default=define_project_root_path() / "data/input_docs")
-    DOCUMENTS_OUT_DIR: Path = Field(default=define_project_root_path() / "data/output_docs")
-    CHUNKS_OUT_DIR: Path = Field(define_project_root_path() / "data/chunks")
-    LLM_PROVIDER: str | None = Field(default=None)
-    LLM_API_KEY: str | None = Field(default=None)
-
+    root = define_project_root_path()
+    model_config = SettingsConfigDict(env_file= root / ".env")
+    QDRANT_HOST: str            = Field(default="localhost")
+    QDRANT_PORT: int            = Field(default=6333)
+    DOCUMENTS_IN_DIR: Path      = Field(default= root  / "data/input_docs")
+    DOCUMENTS_OUT_DIR: Path     = Field(default= root  / "data/output_docs")
+    DOC_MANIFEST_OUT_DIR: Path    = Field(defualt= root / "data/manifest_doc")
+    CHUNKS_OUT_DIR: Path        = Field( root  / "data/chunks")
+    LLM_PROVIDER: str | None    = Field(default=None)
+    LLM_API_KEY: str | None     = Field(default=None)
+    
+    def model_post_init(self, context) -> None:
+        for name in type(self).model_fields:
+            if name.endswith("_DIR"):
+                value = getattr(self,name)
+                if isinstance(value,Path):
+                    value.mkdir(parents=True, exist_ok=True)
+        manifest_path = self.DOC_MANIFEST_OUT_DIR / "manifest.json"
+        if not Path(manifest_path).exists():
+            manifest_path.touch()
+            
 
 settings = Settings()
 

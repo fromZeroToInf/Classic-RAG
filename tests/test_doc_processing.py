@@ -1,7 +1,7 @@
 import pytest
 from backend.doc_processing import Doc_Processing
 from backend.config import Chunking_Constants
-from backend.chunk_schema import Chunk
+from backend.models import Chunk
 @pytest.fixture
 def cts():
  return Chunking_Constants()
