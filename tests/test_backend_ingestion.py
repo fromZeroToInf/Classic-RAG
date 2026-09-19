@@ -2,7 +2,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from backend.config import settings
-from backend.ingestion import read_documents_and_save
+from backend.doc_processing import Doc_Processing
 
 
 def test_read_documents_and_save(tmp_path, monkeypatch):
@@ -23,9 +23,9 @@ def test_read_documents_and_save(tmp_path, monkeypatch):
     dummy_result.status = "SUCCESS"
     dummy_result.document = dummy_doc
 
-    with patch("backend.ingestion.DocumentConverter") as MockConverter:
+    with patch("backend.doc_processing.DocumentConverter") as MockConverter:
         MockConverter.return_value.convert.return_value = dummy_result
-        read_documents_and_save()
+        Doc_Processing.read_documents_and_save()
 
     output_file = output_dir / "dummy.json"
 

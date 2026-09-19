@@ -75,17 +75,43 @@ class Doc_Processing:
         text = re.sub(r"(?<=\w)\xad (?!und)", "", text) #one word separated by dash and whitespace
         return text
 
+    def _remove_processed_data(self, stem:str|None = None) -> None:
+        """ If stem is None, chunks and output_docs will be completely deleted.
+        """
+        all_data = []
+        if stem is None:
+            chunks = list(settings.CHUNKS_OUT_DIR.glob("*.jsonl"))
+            output_docs = list(settings.DOCUMENTS_OUT_DIR.glob("*.json"))
+        else:
+            chunks = list(settings.CHUNKS_OUT_DIR.glob(f"{stem}.jsonl"))
+            output_docs = list(settings.DOCUMENTS_OUT_DIR.glob(f"{stem}.json"))
+        
+        all_data.extend( chunks + output_docs)
+        if all_data:
+            for fp in all_data:
+                os.remove(fp)
+                
+    #TODO: if the manifest is empty -> remove all processed data
     def _manifest_load(self) -> dict[str,Doc_Hashes]:
+        """Loads the manifest. If no file or a corrupted file exists, all processed data will be removed.
+        """
         path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))[0]
         if not path.exists():
+            self._remove_processed_data()
             path.touch()
             return {}
         try:
             return MANIFEST_ADAPTER.validate_json(path.read_bytes())
         except (ValueError, ValidationError):
-            warnings.warn("Manifest file is corrupted. Removing file")
+            warnings.warn("Manifest file is corrupted. Removing files")
+            self._remove_processed_data()
             path.write_text("{}", encoding="utf-8")
             return {}
+    
+    def _manifest_cleaner(self, manifest: dict[str,Doc_Hashes], stem: str)-> None:
+        manifest.pop(stem, None)
+        self._manifest_save(manifest)
+    
         
     def _manifest_save(self, manifest: dict[str, Doc_Hashes])->None:
         path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))[0]
@@ -93,12 +119,6 @@ class Doc_Processing:
         tmp = path.with_suffix("json.tmp")
         tmp.write_bytes(MANIFEST_ADAPTER.dump_json(manifest, indent="2"))
         tmp.replace(path)
-    
-    def _manifest_cleaner(self, manifest: dict[str,Doc_Hashes], stem: str)-> None:
-        manifest.pop(stem, None)
-        self._manifest_save(manifest)
-    
-    #TODO: if the manifest is empty -> remove all processed data
     
     def _build_doc_hashes(self, stem:str, doc_id: str) -> Doc_Hashes:
         dh = Doc_Hashes(
@@ -115,6 +135,8 @@ class Doc_Processing:
     
     
     def _check_doc_hash_against_chunking_Constants(self, item:Doc_Hashes)-> bool:
+        """Checks if the processed data was created by the actual config (chunking constants). In case of deviations the method will return False.
+        """
         #5: tokenizer, max_tokens, ceiling, threshold, normalize_text
         if item.ceiling != self._constants.CEILING:
             return False
@@ -132,26 +154,25 @@ class Doc_Processing:
         """ Checks the processed docs against the config. If a different config exists, the old processed docs need to be removed, and the processing needs to be restarted.
         """ 
         
-        manifest = {}
-        doc_hashes_path = settings.DOC_HASHES_OUT_DIR
-        if os.path.exists(doc_hashes_path):
-            with jsonlines.open(doc_hashes_path, mode="r") as reader:
-                for row in reader:
-                    entry = Doc_Hashes.model_validate(row)
-                    if self._check_doc_hash_against_chunking_Constants(entry) == False:
-                        # in this case: chunks need to be removed and the processed json file (output_docs)
-                        fp = settings.DOCUMENTS_OUT_DIR / entry.source_name +".json"
-                        try: os.remove(fp)
-                        except:
-                            warnings.warn(f"New config detected. Updating related files failed. Could not find: {fp}")
-                        fp2 = settings.CHUNKS_OUT_DIR / entry.source_name + ".jsonl"
-                        try: os.remove(fp2)
-                        except:
-                            warnings.warn(f"New config detected. Updating related files failed. Could not find: {fp2}")
-                    manifest[entry.source] = entry
-        # update manifest
-        
-        return manifest
+        manifest = self._manifest_load()
+        new_manifest = {}
+        process_data = False
+        if not manifest:
+            self._remove_processed_data()
+            
+        for stem,doc_meta in manifest.items():
+            if self._check_doc_hash_against_chunking_Constants(doc_meta) == False:
+                self._remove_processed_data(stem=stem)
+                process_data = True
+            else:
+                new_manifest[stem] = doc_meta
+        if manifest != new_manifest:
+            self._manifest_save(new_manifest)
+        if process_data:
+            self.read_documents_and_save()
+            
+        return new_manifest
+    
     def _merge_chunks(self, a:Chunk, b:Chunk) -> Chunk:
         if a.doc_id != b.doc_id:
             raise ValueError(f"Cannot merge two chunks of different documents:\ndoc_id a:{a.doc_id}\ndoc_id b:{b.doc_id}")
@@ -170,7 +191,7 @@ class Doc_Processing:
         results = [(converter.convert(file), file.stem) for file in fps]
         total_status = [f"{f}: {res.status}" for res, f in results]
 
-        #settings.DOCUMENTS_OUT_DIR.mkdir(parents=True, exist_ok=True)
+        settings.DOCUMENTS_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
         for result, fn in results:
             doc = result.document
@@ -190,30 +211,23 @@ class Doc_Processing:
         #settings.CHUNKS_OUT_DIR.mkdir(parents=True, exist_ok=True)
         
         #load manifest to check doc is new
-        manifest:dict[str,Doc_Hashes] = {}
-        with jsonlines.open(settings.DOC_HASHES_OUT_DIR, mode="r") as reader:
-            for key,value in tqdm(reader, desc="Loading Manifest", unit="file"):
-                manifest[key] = value
+        manifest = self._check_processed_docs_if_up_to_date()
        
         for stem, doc_id in tqdm(hashes, desc="Reading Files", unit="file"):
             fp = list(settings.DOCUMENTS_OUT_DIR.glob(f"{stem}.json"))[0]
             
-            doc_hash = Doc_Hashes(source_name=stem, doc_id=doc_id, tokenizer=self._constants.TEXT_EMBEDDING_MODEL, max_tokens=self._constants.MAX_TOKENS, ceiling=self._constants.CEILING, threshold=self._constants.THRESHOLD_SMALL_CHUNKS, normalize_text=self._hash_fn(self._regex_normalize_text_ger))
+            doc_hash = self._build_doc_hashes(stem, doc_id)
             
             total_hash = self._hash_dict(doc_hash.model_dump())
             doc_hash.total_hash = total_hash
             
             # check if doc was already processed
             if stem in manifest:
-                doc_info_manif = manifest[stem]
-                if doc_hash.total_hash == doc_info_manif.total_hash:
+                doc_meta = manifest[stem]
+                if doc_hash.total_hash == doc_meta.total_hash:
                     continue
                 
-            doc_mapping = {stem: doc_hash}
-            
-            with jsonlines.open(settings.DOC_HASHES_OUT_DIR, mode="w") as writer:
-                writer.write(json.dumps(doc_mapping))
-            
+            manifest[stem] = doc_hash
             
             doc = DoclingDocument.load_from_json(fp)
             out_fp = settings.CHUNKS_OUT_DIR / f"{stem}.jsonl"
@@ -253,7 +267,8 @@ class Doc_Processing:
                     chunk_buffer.chunk_id = str(chunk_no)
                     writer.write(chunk_buffer.model_dump(mode="json"))
                     chunk_no +=1
-
+        
+        self._manifest_save(manifest)
     def load_chunks(self, one_file:Path|None=None) -> list[list[Chunk]]:
         
         chunks_path = list(settings.CHUNKS_OUT_DIR.glob("*.jsonl" if one_file==None else one_file))

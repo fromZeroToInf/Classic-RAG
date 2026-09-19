@@ -2,18 +2,18 @@ from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from typing import ClassVar
 from common.getprojectroot import define_project_root_path
 from dataclasses import dataclass, field
 
 class Settings(BaseSettings):
-    root = define_project_root_path()
+    root: ClassVar[Path] = define_project_root_path()
     model_config = SettingsConfigDict(env_file= root / ".env")
     QDRANT_HOST: str            = Field(default="localhost")
     QDRANT_PORT: int            = Field(default=6333)
     DOCUMENTS_IN_DIR: Path      = Field(default= root  / "data/input_docs")
     DOCUMENTS_OUT_DIR: Path     = Field(default= root  / "data/output_docs")
-    DOC_MANIFEST_OUT_DIR: Path    = Field(defualt= root / "data/manifest_doc")
+    DOC_MANIFEST_OUT_DIR: Path    = Field(default= root / "data/manifest_doc")
     CHUNKS_OUT_DIR: Path        = Field( root  / "data/chunks")
     LLM_PROVIDER: str | None    = Field(default=None)
     LLM_API_KEY: str | None     = Field(default=None)

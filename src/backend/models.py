@@ -1,4 +1,4 @@
-from pydantic import BaseModel,Field
+from pydantic import BaseModel,Field, TypeAdapter
 from docling_core.transforms.chunker.doc_chunk import DocMeta
 
 class Chunk(BaseModel):
@@ -20,3 +20,5 @@ class Doc_Hashes(BaseModel):
     normalize_text: str
     total_hash:str|None = Field(default=None)
     
+
+MANIFEST_ADAPTER = TypeAdapter(dict[str, Doc_Hashes])

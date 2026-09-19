@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-
 def define_project_root_path():
     toFind = ("pyproject.toml", "setup.py", ".git")
 
@@ -12,3 +11,4 @@ def define_project_root_path():
             sys.path.insert(0, str(folder))
             return folder
     raise FileNotFoundError(f"Could not find project root: {cwd}")
+
