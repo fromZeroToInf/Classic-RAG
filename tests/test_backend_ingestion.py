@@ -9,7 +9,7 @@ def test_read_documents_and_save(tmp_path, monkeypatch):
 
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
-
+    
     input_dir.mkdir()
     (input_dir / "dummy.pdf").write_text("test content")
 

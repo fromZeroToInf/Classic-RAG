@@ -95,19 +95,23 @@ class Doc_Processing:
     def _manifest_load(self) -> dict[str,Doc_Hashes]:
         """Loads the manifest. If no file or a corrupted file exists, all processed data will be removed.
         """
-        path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))[0]
-        if not path.exists():
+        
+        path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))
+        if len(path) ==0:
             self._remove_processed_data()
-            path.touch()
             return {}
+        else:
+            path = path[0]
+        
         try:
             return MANIFEST_ADAPTER.validate_json(path.read_bytes())
         except (ValueError, ValidationError):
             warnings.warn("Manifest file is corrupted. Removing files")
             self._remove_processed_data()
-            path.write_text("{}", encoding="utf-8")
+            path.touch()
             return {}
-    
+        
+                
     def _manifest_cleaner(self, manifest: dict[str,Doc_Hashes], stem: str)-> None:
         manifest.pop(stem, None)
         self._manifest_save(manifest)
@@ -117,7 +121,7 @@ class Doc_Processing:
         path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))[0]
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix("json.tmp")
-        tmp.write_bytes(MANIFEST_ADAPTER.dump_json(manifest, indent="2"))
+        tmp.write_bytes(MANIFEST_ADAPTER.dump_json(manifest, indent=2))
         tmp.replace(path)
     
     def _build_doc_hashes(self, stem:str, doc_id: str) -> Doc_Hashes:
