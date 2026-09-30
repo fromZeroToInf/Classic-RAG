@@ -1,10 +1,12 @@
 import pytest
 from backend.doc_processing import Doc_Processing
 from backend.config import Chunking_Constants
-from backend.models import Chunk, Doc_Hashes,MANIFEST_ADAPTER
+from backend.models import Chunk, Doc_Hashes,MANIFEST_ADAPTER, Language
 from backend.config import settings
 from pathlib import Path
 import json
+import hashlib
+import inspect
 
 @pytest.fixture
 def cts():
@@ -30,6 +32,9 @@ def mock_settings(tmp_path, monkeypatch)-> Path:
     manifest.mkdir()
     monkeypatch.setattr(settings, "DOC_MANIFEST_OUT_DIR", manifest)
     return manifest
+
+def fake_normalizer(text:str) -> str:
+    return text.upper()
 
 def test_regex_normalize_text_mult_whitespaces(dp) -> None:
     text1= "H  E  L  L  O"
@@ -98,8 +103,9 @@ def test_manifest_load_should_return_manifest(dp,mock_settings, out_dirs) -> Non
     doc_meta = Doc_Hashes(
         source_name="test",
         doc_id= "test",
+        language = Language.DE,
         tokenizer="test",
-        max_tokens="100",
+        max_tokens=100,
         ceiling=100,
         threshold= 100,
         normalize_text= "test",
@@ -116,8 +122,9 @@ def test_manifest_load_should_return_manifest(dp,mock_settings, out_dirs) -> Non
     assert key == "test_doc"
     assert value.source_name == "test"
     assert value.doc_id == "test"
+    assert value.language == Language.DE
     assert value.tokenizer == "test"
-    assert value.max_tokens == "100"
+    assert value.max_tokens == 100
     assert value.ceiling == 100
     assert value.threshold == 100
     assert value.normalize_text == "test"
@@ -129,8 +136,9 @@ def test_manifest_cleaner_should_return_non_empty_manifest(dp,mock_settings,out_
     doc_meta = Doc_Hashes(
         source_name="test",
         doc_id= "test",
+        language = Language.DE,
         tokenizer="test",
-        max_tokens="100",
+        max_tokens=100,
         ceiling=100,
         threshold= 100,
         normalize_text= "test",
@@ -139,8 +147,9 @@ def test_manifest_cleaner_should_return_non_empty_manifest(dp,mock_settings,out_
     doc_meta2 = Doc_Hashes(
             source_name="test2",
             doc_id= "test2",
+            language=Language.DE,
             tokenizer="test2",
-            max_tokens="100",
+            max_tokens=100,
             ceiling=100,
             threshold= 100,
             normalize_text= "test2",
@@ -159,8 +168,9 @@ def test_manifest_cleaner_should_return_non_empty_manifest(dp,mock_settings,out_
     assert type(new_manifest["test_doc"]) == Doc_Hashes
     assert new_manifest["test_doc"].source_name == "test"
     assert new_manifest["test_doc"].doc_id == "test"
+    assert new_manifest["test_doc"].language == Language.DE
     assert new_manifest["test_doc"].tokenizer == "test"
-    assert new_manifest["test_doc"].max_tokens == "100"
+    assert new_manifest["test_doc"].max_tokens == 100
     assert new_manifest["test_doc"].ceiling == 100
     assert new_manifest["test_doc"].threshold == 100
     assert new_manifest["test_doc"].normalize_text == "test"
@@ -170,8 +180,9 @@ def test_manifest_save_should_write_file1(dp,mock_settings,out_dirs):
     doc_meta = Doc_Hashes(
             source_name="test",
             doc_id= "test",
+            language=Language.DE,
             tokenizer="test",
-            max_tokens="100",
+            max_tokens=100,
             ceiling=100,
             threshold= 100,
             normalize_text= "test",
@@ -187,9 +198,51 @@ def test_manifest_save_should_write_file1(dp,mock_settings,out_dirs):
     assert "test" in manifest_saved
     assert manifest_saved["test"].source_name == "test"
     assert manifest_saved["test"].doc_id == "test"
+    assert manifest_saved["test"].language == Language.DE
     assert manifest_saved["test"].tokenizer == "test"
-    assert manifest_saved["test"].max_tokens == "100"
+    assert manifest_saved["test"].max_tokens == 100
     assert manifest_saved["test"].ceiling == 100
     assert manifest_saved["test"].threshold == 100
     assert manifest_saved["test"].normalize_text== "test"
     assert manifest_saved["test"].total_hash == "test"
+
+def test_build_doc_hashes_should_return_non_empty_doc_hash(dp, monkeypatch, mock_settings,out_dirs):
+    monkeypatch.setattr(dp, "_regex_normalize_text_ger", fake_normalizer)
+    
+    dh = dp._build_doc_hashes(stem="doc", doc_id="abc", language=Language.DE)
+    expected = hashlib.sha256(inspect.getsource(fake_normalizer).encode("utf-8")).hexdigest()[:12]
+    
+    total_hash_expected = dp._hash_dict(dh.model_dump(mode="json", exclude={"total_hash"}))
+    
+    assert dh.normalize_text == expected
+    assert dh.total_hash == total_hash_expected
+
+def test_check_doc_hash_against_chunking_Constants_should_return_false(dp, mock_settings, out_dirs):
+    doc_meta = Doc_Hashes(
+            source_name="test",
+            doc_id= "test",
+            language = Language.DE,
+            tokenizer=dp._constants.TEXT_EMBEDDING_MODEL,
+            max_tokens=dp._constants.MAX_TOKENS,
+            ceiling=dp._constants.CEILING,
+            threshold= dp._constants.THRESHOLD_SMALL_CHUNKS,
+            normalize_text= "test",
+            total_hash="test",
+        )
+    assert dp._check_doc_hash_against_chunking_Constants(doc_meta) == False
+
+def test_check_doc_hash_against_chunking_Constants_should_return_True(dp, mock_settings, out_dirs):
+    dh = Doc_Hashes(
+                source_name="test",
+                doc_id= "test",
+                language = Language.DE,
+                tokenizer=dp._constants.TEXT_EMBEDDING_MODEL,
+                max_tokens=dp._constants.MAX_TOKENS,
+                ceiling=dp._constants.CEILING,
+                threshold= dp._constants.THRESHOLD_SMALL_CHUNKS,
+                normalize_text= dp._hash_fn(dp._get_normalizer(Language.DE)),
+                total_hash="test",
+            )
+    dh.total_hash = dp._hash_dict(dh.model_dump(mode="json", exclude={"total_hash"}))
+    
+    assert dp._check_doc_hash_against_chunking_Constants(dh) == True

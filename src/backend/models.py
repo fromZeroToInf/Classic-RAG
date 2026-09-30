@@ -1,5 +1,7 @@
 from pydantic import BaseModel,Field, TypeAdapter
 from docling_core.transforms.chunker.doc_chunk import DocMeta
+from enum import StrEnum
+from typing import Callable
 
 class Chunk(BaseModel):
     chunk_id: str
@@ -10,6 +12,10 @@ class Chunk(BaseModel):
     token_count: int
     meta: DocMeta
 
+class Language(StrEnum):
+    DE = "de"
+    EN = "en"
+    
 class Doc_Hashes(BaseModel):
     """
     Meta infos used for ingestion caching.
@@ -17,8 +23,9 @@ class Doc_Hashes(BaseModel):
     """
     source_name: str
     doc_id: str
+    language: Language
     tokenizer: str
-    max_tokens: str
+    max_tokens: int
     ceiling: int
     threshold: int
     normalize_text: str

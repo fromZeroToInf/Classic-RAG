@@ -4,7 +4,7 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 from backend.config import Chunking_Constants
 from backend.config import settings
 from backend.config import settings
-from backend.models import Chunk, Doc_Hashes, MANIFEST_ADAPTER
+from backend.models import Chunk, Doc_Hashes, MANIFEST_ADAPTER, Language
 from common.getprojectroot import define_project_root_path
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
@@ -22,6 +22,9 @@ import jsonlines
 import pprint
 import re
 import warnings
+from typing import Callable
+
+
 
 class Doc_Processing:
     def __init__(self, chunking_constants: Chunking_Constants, merge_peers=True, dev_mode=False):
@@ -74,6 +77,12 @@ class Doc_Processing:
         text = re.sub(r"(?<=\w)\xad\n", "", text) # one word separated by dash and newline
         text = re.sub(r"(?<=\w)\xad (?!und)", "", text) #one word separated by dash and whitespace
         return text
+
+    def _get_normalizer(self, language: Language) -> Callable[[str], str]:
+        match language:
+            case Language.DE:
+                return self._regex_normalize_text_ger
+        raise ValueError(f"No normalizer for language {language!r}.")
 
     def _remove_processed_data(self, stem:str|None = None) -> None:
         """ If stem is None, chunks and output_docs will be completely deleted.
@@ -132,15 +141,18 @@ class Doc_Processing:
         tmp.write_bytes(MANIFEST_ADAPTER.dump_json(manifest, indent=2))
         tmp.replace(path)
     
-    def _build_doc_hashes(self, stem:str, doc_id: str) -> Doc_Hashes:
+    def _build_doc_hashes(self, stem:str, doc_id: str, language:Language=Language.DE) -> Doc_Hashes:
+        """Creates the Doc_hash with meta_data"""
+        normalizer = self._get_normalizer(language)
         dh = Doc_Hashes(
             source_name=stem,
             doc_id=doc_id,
+            language = language,
             tokenizer=self._constants.TEXT_EMBEDDING_MODEL,
             max_tokens=self._constants.MAX_TOKENS,
             ceiling=self._constants.CEILING,
             threshold=self._constants.THRESHOLD_SMALL_CHUNKS,
-            normalize_text=self._hash_fn(self._regex_normalize_text_ger)
+            normalize_text=self._hash_fn(normalizer)
         )
         dh.total_hash = self._hash_dict(dh.model_dump(mode="json", exclude={"total_hash"}))
         return dh
@@ -149,18 +161,34 @@ class Doc_Processing:
     def _check_doc_hash_against_chunking_Constants(self, item:Doc_Hashes)-> bool:
         """Checks if the processed data was created by the actual config (chunking constants). In case of deviations the method will return False.
         """
+        dh = Doc_Hashes(
+                source_name=item.source_name,
+                doc_id= item.doc_id,
+                language = item.language,
+                tokenizer=self._constants.TEXT_EMBEDDING_MODEL,
+                max_tokens=self._constants.MAX_TOKENS,
+                ceiling=self._constants.CEILING,
+                threshold= self._constants.THRESHOLD_SMALL_CHUNKS,
+                normalize_text= self._hash_fn(self._get_normalizer(item.language)),
+                total_hash="",
+            )
+        dh.total_hash = self._hash_dict(dh.model_dump(mode="json", exclude={"total_hash"}))
+        
+        if dh.total_hash == item.total_hash:
+            return True
+        return False
         #5: tokenizer, max_tokens, ceiling, threshold, normalize_text
-        if item.ceiling != self._constants.CEILING:
-            return False
-        if item.max_tokens != self._constants.MAX_TOKENS:
-            return False
-        if item.normalize_text != self._hash_fn(self._regex_normalize_text_ger):
-            return False
-        if item.threshold != self._constants.THRESHOLD_SMALL_CHUNKS:
-            return False
-        if item.tokenizer != self._constants.TEXT_EMBEDDING_MODEL:
-            return False
-        return True
+        # if item.ceiling != self._constants.CEILING:
+        #     return False
+        # if item.max_tokens != self._constants.MAX_TOKENS:
+        #     return False
+        # if item.normalize_text != self._hash_fn(self._get_normalizer(item.language)):
+        #     return False
+        # if item.threshold != self._constants.THRESHOLD_SMALL_CHUNKS:
+        #     return False
+        # if item.tokenizer != self._constants.TEXT_EMBEDDING_MODEL:
+        #     return False
+        # return True
     
     def _check_processed_docs_if_up_to_date(self)->dict[str,Doc_Hashes]:
         """ Checks the processed docs against the config. If a different config exists, the old processed docs need to be removed, and the processing needs to be restarted.
