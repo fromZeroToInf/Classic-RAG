@@ -93,7 +93,7 @@ class Doc_Processing:
                 
     #TODO: if the manifest is empty -> remove all processed data
     def _manifest_load(self) -> dict[str,Doc_Hashes]:
-        """Loads the manifest. If no file or a corrupted file exists, all processed data will be removed.
+        """Loads the manifest file. If no file or a corrupted file exists, all processed data will be removed.
         """
         
         path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))
@@ -113,14 +113,20 @@ class Doc_Processing:
         
                 
     def _manifest_cleaner(self, manifest: dict[str,Doc_Hashes], stem: str)-> None:
+        """Removes stem from manifest and associated chunks and outputdocs"""
         manifest.pop(stem, None)
+        self._remove_processed_data(stem=stem)
         self._manifest_save(manifest)
-    
         
     def _manifest_save(self, manifest: dict[str, Doc_Hashes])->None:
-        path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))[0]
+        path = list(settings.DOC_MANIFEST_OUT_DIR.glob("*.json"))
+        if not path:
+            path = (settings.DOC_MANIFEST_OUT_DIR / "manifest.json")
+            path.touch()
+        else:
+            path = path[0]
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix("json.tmp")
+        tmp = path.with_suffix(".json.tmp")
         tmp.write_bytes(MANIFEST_ADAPTER.dump_json(manifest, indent=2))
         tmp.replace(path)
     

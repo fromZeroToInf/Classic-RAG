@@ -124,6 +124,8 @@ def test_manifest_load_should_return_manifest(dp,mock_settings, out_dirs) -> Non
     assert value.total_hash == "test"
 
 def test_manifest_cleaner_should_return_non_empty_manifest(dp,mock_settings,out_dirs):
+    #manifest_file = settings.DOC_MANIFEST_OUT_DIR / "manifest.json"
+    
     doc_meta = Doc_Hashes(
         source_name="test",
         doc_id= "test",
@@ -152,14 +154,14 @@ def test_manifest_cleaner_should_return_non_empty_manifest(dp,mock_settings,out_
     new_manifest = dp._manifest_load()
     
     assert len(new_manifest.items()) == 1
-    assert "test_doc" in new_manifest == True
-    assert "test2_doc" not in new_manifest == True
+    assert "test_doc" in new_manifest
+    assert "test2_doc" not in new_manifest
     assert type(new_manifest["test_doc"]) == Doc_Hashes
-    assert new_manifest["test_doc"].source_name == "test2"
-    assert new_manifest["test_doc"].doc_id == "test2"
-    assert new_manifest["test_doc"].tokenizer == "test2"
+    assert new_manifest["test_doc"].source_name == "test"
+    assert new_manifest["test_doc"].doc_id == "test"
+    assert new_manifest["test_doc"].tokenizer == "test"
     assert new_manifest["test_doc"].max_tokens == "100"
     assert new_manifest["test_doc"].ceiling == 100
     assert new_manifest["test_doc"].threshold == 100
-    assert new_manifest["test_doc"].normalize_text == "test2"
-    assert new_manifest["test_doc"].total_hash == "test2"
+    assert new_manifest["test_doc"].normalize_text == "test"
+    assert new_manifest["test_doc"].total_hash == "test"
