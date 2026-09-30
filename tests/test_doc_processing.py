@@ -165,3 +165,31 @@ def test_manifest_cleaner_should_return_non_empty_manifest(dp,mock_settings,out_
     assert new_manifest["test_doc"].threshold == 100
     assert new_manifest["test_doc"].normalize_text == "test"
     assert new_manifest["test_doc"].total_hash == "test"
+
+def test_manifest_save_should_write_file1(dp,mock_settings,out_dirs):
+    doc_meta = Doc_Hashes(
+            source_name="test",
+            doc_id= "test",
+            tokenizer="test",
+            max_tokens="100",
+            ceiling=100,
+            threshold= 100,
+            normalize_text= "test",
+            total_hash="test",
+        )
+    manifest = {"test":doc_meta}
+    
+    dp._manifest_save(manifest)
+    
+    manifest_path = settings.DOC_MANIFEST_OUT_DIR / "manifest.json"
+    manifest_saved = MANIFEST_ADAPTER.validate_json(manifest_path.read_bytes())
+    
+    assert "test" in manifest_saved
+    assert manifest_saved["test"].source_name == "test"
+    assert manifest_saved["test"].doc_id == "test"
+    assert manifest_saved["test"].tokenizer == "test"
+    assert manifest_saved["test"].max_tokens == "100"
+    assert manifest_saved["test"].ceiling == 100
+    assert manifest_saved["test"].threshold == 100
+    assert manifest_saved["test"].normalize_text== "test"
+    assert manifest_saved["test"].total_hash == "test"
