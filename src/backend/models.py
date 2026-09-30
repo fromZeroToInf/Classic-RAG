@@ -11,6 +11,10 @@ class Chunk(BaseModel):
     meta: DocMeta
 
 class Doc_Hashes(BaseModel):
+    """
+    Meta infos used for ingestion caching.
+    Doc_hashes is a part of the manifest.
+    """
     source_name: str
     doc_id: str
     tokenizer: str
@@ -21,4 +25,7 @@ class Doc_Hashes(BaseModel):
     total_hash:str|None = Field(default=None)
     
 
+"""
+MANIFEST: dict[stem, doc_meta]
+"""
 MANIFEST_ADAPTER = TypeAdapter(dict[str, Doc_Hashes])
