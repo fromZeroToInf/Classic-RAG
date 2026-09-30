@@ -89,6 +89,7 @@ class Doc_Processing:
         all_data.extend( chunks + output_docs)
         if all_data:
             for fp in all_data:
+                warnings.warn(f"removing processed data:\n{fp}")
                 os.remove(fp)
                 
     #TODO: if the manifest is empty -> remove all processed data
@@ -115,6 +116,7 @@ class Doc_Processing:
     def _manifest_cleaner(self, manifest: dict[str,Doc_Hashes], stem: str)-> None:
         """Removes stem from manifest and associated chunks and outputdocs"""
         manifest.pop(stem, None)
+        warnings.warn(f"Updating manifest, file {stem} will be deleted.")
         self._remove_processed_data(stem=stem)
         self._manifest_save(manifest)
         
