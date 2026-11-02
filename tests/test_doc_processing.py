@@ -246,3 +246,7 @@ def test_check_doc_hash_against_chunking_Constants_should_return_True(dp, mock_s
     dh.total_hash = dp._hash_dict(dh.model_dump(mode="json", exclude={"total_hash"}))
     
     assert dp._check_doc_hash_against_chunking_Constants(dh) == True
+
+def test_check_processed_docs_if_up_to_date(dp,mock_settings, out_dirs):
+    #TODO:
+    pass
