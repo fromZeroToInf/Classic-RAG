@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DOCUMENTS_IN_DIR: Path = Field(default=root / "data/input_docs")
     DOCUMENTS_OUT_DIR: Path = Field(default=root / "data/output_docs")
     DOC_MANIFEST_OUT_DIR: Path = Field(default=root / "data/manifest_doc")
-    CHUNKS_OUT_DIR: Path = Field(root / "data/chunks")
+    CHUNKS_OUT_DIR: Path = Field(default=root / "data/chunks")
     LLM_PROVIDER: str | None = Field(default=None)
     LLM_API_KEY: str | None = Field(default=None)
 
@@ -26,9 +26,9 @@ class Settings(BaseSettings):
                 value = getattr(self, name)
                 if isinstance(value, Path):
                     value.mkdir(parents=True, exist_ok=True)
-        manifest_path = self.DOC_MANIFEST_OUT_DIR / "manifest.json"
-        if not Path(manifest_path).exists():
-            manifest_path.touch()
+        # manifest_path = self.DOC_MANIFEST_OUT_DIR / "manifest.json"
+        # if not Path(manifest_path).exists():
+        #     manifest_path.touch()
 
 
 settings = Settings()

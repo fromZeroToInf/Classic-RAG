@@ -320,9 +320,6 @@ class Doc_Processing:
         fp = settings.DOCUMENTS_OUT_DIR / f"{stem}.json"
         doc = DoclingDocument.load_from_json(fp)
         out_fp = settings.CHUNKS_OUT_DIR / f"{stem}.jsonl"
-        # TODO: deine bisherige Schleife hierher verschieben
-        # TODO: self._regex_normalize_text_ger(...) → normalizer(...)
-        # TODO: isinstance(chunk, DocChunk)-Check für Pylance
         with jsonlines.open(out_fp, mode="w") as writer:
             chunk_no = 0
             chunk_buffer: Chunk | None = None
