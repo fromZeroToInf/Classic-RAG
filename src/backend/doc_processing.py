@@ -13,6 +13,7 @@ from typing import Callable, List, Tuple
 import jsonlines
 from docling.document_converter import DocumentConverter
 from docling_core.transforms.chunker.doc_chunk import DocChunk
+from docling_core.transforms.chunker.hierarchical_chunker import DocChunk
 from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from docling_core.types.doc.document import DoclingDocument
@@ -305,17 +306,72 @@ class Doc_Processing:
         self, stem: str, doc_hash: Doc_Hashes, manifest: dict[str, Doc_Hashes]
     ) -> bool:
         # TODO: stem im Manifest?
+        if not manifest[stem]:
+            return False
         # TODO: total_hash gleich?
+        if doc_hash.total_hash != manifest[stem].total_hash:
+            return False
         # TODO: Chunk-Datei existiert noch? (jemand könnte sie manuell gelöscht haben)
-        ...
+        if not os.path.exists(settings.CHUNKS_OUT_DIR / f"{stem}.jsonl"):
+            return False
+        return True
+
+    def _chunk_document(self, stem: str, doc_id: str, normalizer: Callable[[str], str]) -> None:
+        fp = settings.DOCUMENTS_OUT_DIR / f"{stem}.json"
+        doc = DoclingDocument.load_from_json(fp)
+        out_fp = settings.CHUNKS_OUT_DIR / f"{stem}.jsonl"
+        # TODO: deine bisherige Schleife hierher verschieben
+        # TODO: self._regex_normalize_text_ger(...) → normalizer(...)
+        # TODO: isinstance(chunk, DocChunk)-Check für Pylance
+        with jsonlines.open(out_fp, mode="w") as writer:
+            chunk_no = 0
+            chunk_buffer: Chunk | None = None
+
+            for chunk in tqdm(
+                self._hyb_chunker.chunk(dl_doc=doc),
+                desc="Processing chunks",
+                unit="chunk",
+                leave=False,
+            ):
+                chunk.text = normalizer(chunk.text)
+                ctx = self._hyb_chunker.contextualize(chunk)
+                chunk = DocChunk.model_validate(chunk)
+                c = Chunk(
+                    chunk_id="",
+                    doc_id=doc_id,
+                    doc_name=str(stem) + ".pdf",
+                    text=chunk.text,
+                    contextualized_text=ctx,
+                    token_count=self._tokenizer.count_tokens(ctx),
+                    meta=chunk.meta,
+                )
+                if chunk_buffer is None:
+                    chunk_buffer = c
+                    continue
+
+                is_small = (chunk_buffer.token_count < self._constants.THRESHOLD_SMALL_CHUNKS) or (
+                    c.token_count < self._constants.THRESHOLD_SMALL_CHUNKS
+                )
+
+                fits = chunk_buffer.token_count + c.token_count < self._constants.CEILING
+                if is_small and fits:
+                    chunk_buffer = self._merge_chunks(chunk_buffer, c)
+                else:
+                    chunk_buffer.chunk_id = str(chunk_no)
+                    writer.write(chunk_buffer.model_dump(mode="json"))
+                    chunk_no += 1
+                    chunk_buffer = c
+
+            if chunk_buffer is not None:
+                chunk_buffer.chunk_id = str(chunk_no)
+                writer.write(chunk_buffer.model_dump(mode="json"))
+                chunk_no += 1
 
     def make_chunks(self, language: Language = Language.DE) -> None:
         hashes = self._hash_files(settings.DOCUMENTS_IN_DIR)
         manifest = self._manifest_load()
-
-        manifest = self._remove_orphans(manifest, current_stems={stems for _, stems in hashes})
+        self._remove_orphans(manifest, current_stems={stems for _, stems in hashes})
         self._ensure_converted(hashes, manifest)  # Punkt 2 + 3
-
         normalizer = self._get_normalizer(language)  # Punkt 6
         for doc_id, stem in tqdm(hashes.items(), desc="Reading Files", unit="file"):
             doc_hash = self._build_doc_hashes(stem, doc_id, language)
@@ -323,7 +379,6 @@ class Doc_Processing:
                 continue
             self._chunk_document(stem, doc_id, normalizer)
             manifest[stem] = doc_hash
-
         self._manifest_save(manifest)
 
     def load_chunks(self, one_file: Path | None = None) -> list[list[Chunk]]:
